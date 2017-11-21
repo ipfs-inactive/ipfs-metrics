@@ -25,7 +25,7 @@ type Command struct {
 }
 
 func init() {
-	infolog = log.New(os.Stdout, "INFO - ", log.Ldate|log.Ltime)
+	infolog = log.New(os.Stderr, "INFO - ", log.Ldate|log.Ltime)
 	errlog = log.New(os.Stderr, "ERROR - ", log.Ldate|log.Ltime)
 	port = ":9123"
 	db = "ipfsmetrics"
