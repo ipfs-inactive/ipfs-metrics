@@ -110,7 +110,7 @@ func (lp *LogProxy) WriteSink() {
 			if lp.Sink == "stdout" {
 				os.Stdout.Write([]byte(b))
 			} else {
-				url := fmt.Sprintf("http://%s/write?db=mydb", lp.Sink)
+				url := fmt.Sprintf("http://%s/write?db=%s", lp.Sink, db)
 				resp, err := http.Post(url, "application/octet-stream", bytes.NewBuffer(b))
 				if err != nil {
 					errlog.Printf("Did you forget to include the port? Inlfux is usualy on 8086")

@@ -11,7 +11,7 @@ import (
 )
 
 var infolog, errlog *log.Logger
-var port string
+var port, db string
 var proxyList = make(map[string]*LogProxy)
 
 type Command struct {
@@ -28,6 +28,7 @@ func init() {
 	infolog = log.New(os.Stdout, "INFO - ", log.Ldate|log.Ltime)
 	errlog = log.New(os.Stderr, "ERROR - ", log.Ldate|log.Ltime)
 	port = ":9123"
+	db = "ipfsmetrics"
 }
 
 func main() {
@@ -160,6 +161,13 @@ var startCmd = cli.Command{
 	Usage: "starts ipfs-metricsd",
 	Action: func(c *cli.Context) error {
 		infolog.Println("ipfs-metricsd starting...")
+		infolog.Print("Ensuring database exists...")
+		_, err := CreateDatabase(db)
+		if err != nil {
+			errlog.Println("Failed to create database: ", err)
+			errlog.Fatal("Please ensure that influxdb is running")
+		}
+		infolog.Print("database found!")
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			handleConnection(w, r)
 		})

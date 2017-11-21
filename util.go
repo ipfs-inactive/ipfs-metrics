@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 )
 
 func NewCommand(cmd, source, sink string, tags []string) *Command {
@@ -15,6 +18,31 @@ func NewCommand(cmd, source, sink string, tags []string) *Command {
 		Sink:   sink,
 		Tags:   tags,
 	}
+}
+
+func CreateDatabase(dbName string) (*http.Response, error) {
+	influxUrl := "http://localhost:8086"
+	resource := "/query"
+	data := url.Values{}
+	data.Set("q", fmt.Sprintf("CREATE DATABASE %s", dbName))
+
+	u, _ := url.ParseRequestURI(influxUrl)
+	u.Path = resource
+	urlStr := u.String()
+
+	client := &http.Client{}
+	r, err := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
+
+	resp, err := client.Do(r)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
 }
 
 func SendCommand(c *Command) (*http.Response, error) {
