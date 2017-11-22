@@ -15,7 +15,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 	cmd.Response = w
 
 	var result = "Success"
-	switch cmd.Cmd {
+	switch cmd.Type {
 	case "add":
 		err := handleAddCollection(cmd)
 		if err != nil {
@@ -58,11 +58,11 @@ func handleRemoveCollection(node string) error {
 }
 
 type ListResult struct {
-	Name   string   `json:"name"`
-	Source string   `json:"source"`
-	Sink   string   `json:"sink"`
-	Format string   `json:"format"`
-	Tags   []string `json:"tags"`
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	Sink   string `json:"sink"`
+	Format string `json:"format"`
+	Tags   []Tag  `json:"tags"`
 }
 
 //List all sources in collection
@@ -94,7 +94,7 @@ func handleAddCollection(cmd *Command) error {
 	}
 
 	lp := &LogProxy{
-		Name:     cmd.Node, //TODO make the tags a map and use the nodeId for the name
+		Name:     cmd.Node,
 		Source:   cmd.Source,
 		Sink:     cmd.Sink,
 		Inbound:  make(chan LogEvent, 64),

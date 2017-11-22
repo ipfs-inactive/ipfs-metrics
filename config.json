@@ -1,0 +1,23 @@
+{
+	"Source":
+	{
+		"Address": "127.0.0.1",
+		"Port": "5001",
+		"Tags": [
+			{
+				"Name": "TagName1",
+				"Value": "TagValue1"
+			},
+			{
+				"Name": "TagName2",
+				"Value": "TagValue2"
+			}
+		]
+	},
+	"Sink":
+	{
+		"Address": "127.0.0.2",
+		"Port": "8086",
+		"Format": "lineprotocol"
+	}
+}
