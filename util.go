@@ -46,7 +46,6 @@ func CreateDatabase(dbName string) (*http.Response, error) {
 }
 
 func SendCommand(c *Command) (*http.Response, error) {
-
 	b, err := json.Marshal(c)
 	if err != nil {
 		errlog.Fatal("Failed to Marshal Command: ", err)

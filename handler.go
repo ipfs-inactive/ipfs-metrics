@@ -26,7 +26,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(cmd.Response, string(printCmd))
 		return
 	case "remove":
-		err := handleRemoveCollection(cmd)
+		err := handleRemoveCollection(cmd.Node)
 		if err != nil {
 			result = err.Error()
 		}
@@ -45,14 +45,14 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 }
 
 //Remove a source from the collection
-func handleRemoveCollection(cmd *Command) error {
-	lp := proxyList[cmd.Source]
+func handleRemoveCollection(node string) error {
+	lp := proxyList[node]
 	if lp == nil {
-		err := errors.New(fmt.Sprintf("ERROR - Source: %s not in collection", cmd.Source))
+		err := errors.New(fmt.Sprintf("ERROR - Source: %s not in collection", node))
 		return err //since this needs to go to the client
 	}
 	lp.Close()
-	delete(proxyList, cmd.Source)
+	delete(proxyList, node)
 	return nil
 
 }
@@ -88,13 +88,13 @@ func handleListCollection(cmd *Command) error {
 
 //Add a source to the collection
 func handleAddCollection(cmd *Command) error {
-	if proxyList[cmd.Source] != nil {
-		err := errors.New(fmt.Sprintf("ERROR - Source: %s already in collection", cmd.Source))
+	if proxyList[cmd.Node] != nil {
+		err := errors.New(fmt.Sprintf("ERROR - Source: %s already in collection", cmd.Node))
 		return err
 	}
 
 	lp := &LogProxy{
-		Name:     cmd.Source, //TODO make the tags a map and use the nodeId for the name
+		Name:     cmd.Node, //TODO make the tags a map and use the nodeId for the name
 		Source:   cmd.Source,
 		Sink:     cmd.Sink,
 		Inbound:  make(chan LogEvent, 64),

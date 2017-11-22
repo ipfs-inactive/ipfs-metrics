@@ -16,6 +16,7 @@ var proxyList = make(map[string]*LogProxy)
 
 type Command struct {
 	Cmd      string              `json:"cmds"`     //add, remove, list
+	Node     string              `json:"node"`     //the name of the node the command it for
 	Source   string              `json:"source"`   //source of the log messages
 	Sink     string              `json:"sink"`     //sink where the log messages will flow
 	Tags     []string            `json:"tags"`     //tags on log messages, nodeId is added by default (serves as a liveness check)
@@ -106,6 +107,7 @@ var addCmd = cli.Command{
 		tags = append(tags, c.Args().Tail()...)
 		cmd := &Command{
 			Cmd:    "add",
+			Node:   nodeId,
 			Source: source,
 			Sink:   sink,
 			Tags:   tags,
@@ -126,8 +128,8 @@ var rmCmd = cli.Command{
 	Usage: "remove ipfs daemon from metrics collection",
 	Action: func(c *cli.Context) error {
 		cmd := &Command{
-			Cmd:    "remove",
-			Source: c.Args().First(),
+			Cmd:  "remove",
+			Node: c.Args().First(),
 		}
 		resp, err := SendCommand(cmd)
 		if err != nil {
