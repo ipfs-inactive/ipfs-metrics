@@ -40,6 +40,12 @@ func ValidTag(maybeTag string) bool {
 	if !strings.Contains(maybeTag, "=") {
 		return false
 	}
+	if strings.Contains(maybeTag, ",") {
+		return false
+	}
+	if strings.HasSuffix(maybeTag, `\`) {
+		return false
+	}
 	nv := strings.Split(maybeTag, "=")
 	if len(nv) != 2 {
 		return false
