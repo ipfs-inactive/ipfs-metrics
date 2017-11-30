@@ -17,10 +17,8 @@ var proxyList = make(map[string]*LogProxy)
 type Command struct {
 	Type     string              `json:"type"`     //add, remove, list
 	Node     string              `json:"node"`     //the name of the node the command it for
-	Source   string              `json:"source"`   //source of the log messages
-	Sink     string              `json:"sink"`     //sink where the log messages will flow
-	Tags     []Tag               `json:"tags"`     //tags on log messages, nodeId is added by default (serves as a liveness check)
-	Format   string              `json:"format"`   //json or line protocol
+	Source   []Source            `json:"source"`   //source of the log messages
+	Sink     Sink                `json:"sink"`     //sink where the log messages will flow
 	Result   string              `json:"result"`   //result of command - success or error message
 	Response http.ResponseWriter `json:"response"` //where the result of the command will be written
 }
@@ -62,7 +60,7 @@ var addCmd = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:  "lineprotocol, lp",
-			Usage: "Use Line Protocol Format (Influxdb) when writing to output",
+			Usage: "Use Line Protocol Format (Influxdb) when writing to output instead of json",
 		},
 		cli.StringFlag{
 			Name:  "config, c",
@@ -71,7 +69,8 @@ var addCmd = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		showUsage := func(w io.Writer) {
-			fmt.Fprintln(w, "ipfs-metrics add -i [input - ip:port] -o [output ip:port] [tagKey1=tagValue1...tagKeyn=tagValuen]\n")
+			fmt.Fprintln(w, "ipfs-metrics add -i [ip:port] -o [ip:port] [tagKey1=tagValue1...tagKeyn=tagValuen]\n")
+			fmt.Fprintln(w, "ipfs-metrics add --config [configFile]\n")
 		}
 		cmd, err := NewAddCommand(c)
 		if err != nil {
@@ -128,13 +127,6 @@ var startCmd = cli.Command{
 	Usage: "starts ipfs-metricsd",
 	Action: func(c *cli.Context) error {
 		infolog.Println("ipfs-metricsd starting...")
-		infolog.Print("Ensuring database exists...")
-		_, err := CreateDatabase(db)
-		if err != nil {
-			errlog.Println("Failed to create database: ", err)
-			errlog.Fatal("Please ensure that influxdb is running")
-		}
-		infolog.Print("database found!")
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			handleConnection(w, r)
 		})

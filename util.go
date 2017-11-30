@@ -13,91 +13,32 @@ import (
 	cli "github.com/codegangsta/cli"
 )
 
-//return nil if valid, error if else
-func ValidConfig(config *Config) error {
-	if len(config.Source.Address) == 0 || len(config.Source.Port) == 0 {
-		return errors.New("Invalid config, no source specified")
-	}
-	if len(config.Sink.Address) != 0 && len(config.Sink.Port) == 0 {
-		return errors.New("invalid config, no sink port given")
-	}
-	if len(config.Sink.Address) == 0 && len(config.Sink.Port) != 0 {
-		return errors.New("invalid config, no sink address given")
-	}
-	if len(config.Sink.Format) == 0 {
-		return errors.New("invalid config, no sink format given")
-	}
-	format := strings.ToLower(config.Sink.Format)
-	if !(format == "json" || format == "lineprotocol") {
-		return errors.New(fmt.Sprintf("invalid config, unknown format: %s", format))
-	}
-	return nil
-}
-
 //returns a command or erros if invlaid options given
 func NewAddCommand(c *cli.Context) (*Command, error) {
-	var cmd Command
-	cmd.Type = "add"
+	var err error
+	config := new(Config)
+	//we will load file config, or use
 	if len(c.String("config")) != 0 {
-		config, err := LoadConfig(c.String("config"))
-		if err != nil {
-			return nil, err
-		}
-		//ensure we are pased valid config options
-		if err := ValidConfig(config); err != nil {
-			return nil, err
-		}
-		cmd.Source = fmt.Sprintf("%s:%s", config.Source.Address, config.Source.Port)
-		cmd.Tags = config.Source.Tags
-		cmd.Format = strings.ToLower(config.Sink.Format)
-
-		if len(config.Sink.Address) == 0 {
-			infolog.Println("No output given, will write to stdout")
-			cmd.Sink = "stdout"
-		} else {
-			cmd.Sink = fmt.Sprintf("%s:%s", config.Sink.Address, config.Sink.Port)
-		}
+		config, err = LoadConfigFromFile(c.String("config"))
 	} else {
-		//TODO's(forrestweston):
-		// add -a (address) -p (port) options for cli input
-		// add format field (to replace --lineprotocol field)
-		// add enums for things like "output" and format
-		if len(c.String("input")) == 0 {
-			return nil, errors.New("Input of event logs required")
-		} else {
-			cmd.Source = c.String("input")
-		}
-
-		if len(c.String("output")) == 0 {
-			infolog.Println("No output given, will write to stdout")
-			cmd.Sink = "stdout"
-		} else {
-			cmd.Sink = c.String("output")
-		}
-
-		if c.Bool("lineprotocol") {
-			cmd.Format = "lineprotocol"
-		} else {
-			cmd.Format = "json"
-		}
+		config, err = LoadConfigFromArgs(c)
 	}
-	//A default Tag, a liveness check for ipfs daemon, and a name for the collection when removing/listing
-	nodeId, err := GetNodeId(cmd.Source)
 	if err != nil {
 		return nil, err
 	}
-	cmd.Tags = append(cmd.Tags, MakeTag("nodeId", nodeId))
-	ts, err := MakeTags(c.Args())
-	if err != nil {
+	//ensure we are pased valid config options
+	if err := ValidConfig(config); err != nil {
 		return nil, err
 	}
-	cmd.Tags = append(cmd.Tags, ts...)
-	cmd.Node = nodeId
-	return &cmd, nil
+	return &Command{
+		Type:   "add",
+		Source: config.Source,
+		Sink:   config.Sink,
+	}, nil
 }
 
-func CreateDatabase(dbName string) (*http.Response, error) {
-	influxUrl := "http://localhost:8086"
+func CreateDatabase(dbName string, sink Sink) (*http.Response, error) {
+	influxUrl := fmt.Sprintf("http://%s", sink)
 	resource := "/query"
 	data := url.Values{}
 	data.Set("q", fmt.Sprintf("CREATE DATABASE %s", dbName))
@@ -144,15 +85,14 @@ func SendCommand(c *Command) (*http.Response, error) {
 	return resp, nil
 }
 
-func GetIpfsLogAddress(multiadder, encoding string) string {
-	return fmt.Sprintf("http://%s/api/v0/log/tail?encoding=%s&stream-channels=true", multiadder, encoding)
+func GetIpfsLogAddress(source Source) string {
+	return fmt.Sprintf("http://%s/api/v0/log/tail?encoding=json&stream-channels=true", source)
 }
 
-func GetNodeId(multiadder string) (string, error) {
-	url := fmt.Sprintf("http://%s/api/v0/id", multiadder)
+func GetNodeId(source Source) (string, error) {
+	url := fmt.Sprintf("http://%s/api/v0/id", source)
 	resp, err := http.Get(url)
 	if err != nil {
-		errlog.Printf("Get NodeId, is the ipfs daemon running?\n")
 		return "", err
 	}
 	var nodeInfo map[string]interface{}
@@ -163,7 +103,7 @@ func GetNodeId(multiadder string) (string, error) {
 	}
 	nodeId := nodeInfo["ID"].(string)
 	if nodeId == "" {
-		return "", errors.New("Could not get NodeID, are you sure this is an ipfs daemon?")
+		return "", errors.New("Could not get nodeId, are you sure this is an ipfs daemon?")
 	}
 	return nodeId, nil
 }

@@ -59,8 +59,8 @@ func handleRemoveCollection(node string) error {
 
 type ListResult struct {
 	Name   string `json:"name"`
-	Source string `json:"source"`
-	Sink   string `json:"sink"`
+	Source Source `json:"source"`
+	Sink   Sink   `json:"sink"`
 	Format string `json:"format"`
 	Tags   []Tag  `json:"tags"`
 }
@@ -73,8 +73,6 @@ func handleListCollection(cmd *Command) error {
 				Name:   lp.Name,
 				Source: lp.Source,
 				Sink:   lp.Sink,
-				Format: lp.Format,
-				Tags:   lp.Tags,
 			}
 			ent, err := json.MarshalIndent(lr, "", "\t")
 			if err != nil {
@@ -88,21 +86,32 @@ func handleListCollection(cmd *Command) error {
 
 //Add a source to the collection
 func handleAddCollection(cmd *Command) error {
-	if proxyList[cmd.Node] != nil {
-		err := errors.New(fmt.Sprintf("ERROR - Source: %s already in collection", cmd.Node))
-		return err
+	//start a routine for each source, if there is an error with one, skip it
+	for s := range cmd.Source {
+		source := cmd.Source[s]
+		name, err := GetNodeId(source)
+		if err != nil {
+			//TODO Add feature to start and stop collection on different sources
+			//e.g. add the source with status offline and poll it till its up/producing logs
+			fmt.Fprintf(cmd.Response, "Failed to get NodeId: "+err.Error()+" will skip")
+			continue
+		}
+		//we do not want to add the same source twice
+		if proxyList[name] != nil {
+			err := fmt.Sprintf("Source: %s, with Name: %s already in collection, will skip", source, name)
+			fmt.Fprintf(cmd.Response, err)
+			continue
+		}
+		source.Tags = append(source.Tags, MakeTag("nodeId", name))
+		lp := &LogProxy{
+			Name:     name,
+			Source:   source,
+			Sink:     cmd.Sink,
+			Inbound:  make(chan LogEvent, 64),
+			Outbound: make(chan LogEvent, 64),
+		}
+		go lp.Start()
 	}
 
-	lp := &LogProxy{
-		Name:     cmd.Node,
-		Source:   cmd.Source,
-		Sink:     cmd.Sink,
-		Inbound:  make(chan LogEvent, 64),
-		Outbound: make(chan LogEvent, 64),
-		Tags:     cmd.Tags,
-		Format:   cmd.Format,
-	}
-
-	go lp.Start()
 	return nil
 }

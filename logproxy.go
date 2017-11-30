@@ -13,10 +13,8 @@ import (
 
 type LogProxy struct {
 	Name         string
-	Source       string
-	Sink         string
-	Format       string
-	Tags         []Tag
+	Source       Source
+	Sink         Sink
 	sourceStream io.ReadCloser
 	sinkStream   io.WriteCloser
 	Inbound      chan LogEvent
@@ -30,14 +28,26 @@ type LogProxy struct {
 func (lp *LogProxy) Start() {
 	lp.ctx, lp.cancel = context.WithCancel(context.Background())
 
-	sourceUrl := GetIpfsLogAddress(lp.Source, "json")
+	sourceUrl := GetIpfsLogAddress(lp.Source)
 	resp, err := http.Get(sourceUrl)
 	if err != nil {
 		errlog.Println("Get log stream: ", err)
-		panic(err)
+		return
 	}
 	lp.sourceStream = resp.Body
 
+	//If we are not writing to stdout, and the format is lineprotocol
+	//we are probably writing to influxdb, so ensure the db exists
+	if len(lp.Sink.Address) != 0 && lp.Sink.Format == "lineprotocol" {
+		_, err := CreateDatabase(db, lp.Sink)
+		if err != nil {
+			errlog.Println("Failed to create database: ", err)
+			panic("Please ensure that influxdb is running")
+		}
+		infolog.Print("database found!")
+	}
+
+	infolog.Printf("Opening Connection Name: %s\n", lp.Name)
 	go lp.ReadSource()
 	go lp.FilterEvents()
 	go lp.WriteSink()
@@ -47,18 +57,18 @@ func (lp *LogProxy) Start() {
 
 //Read from the source -> Filter
 func (lp *LogProxy) ReadSource() {
-	infolog.Printf("Reader Open In-Stream: %s\n", lp.Source)
+	infolog.Printf("Reader Open In-Stream: %s Name: %s\n", lp.Source, lp.Name)
 	dec := json.NewDecoder(lp.sourceStream)
 	for {
 		select {
 		case <-lp.ctx.Done():
-			infolog.Printf("Reader Close In-Stream: %s\n", lp.Source)
+			infolog.Printf("Reader Close In-Stream: %s Name: %s\n", lp.Source, lp.Name)
 			lp.sourceStream.Close()
 			return
 		default:
 			var event LogEvent
 			if err := dec.Decode(&event.Message); err != nil {
-				errlog.Println("Read Source Decode: ", err)
+				errlog.Printf("Read Source: %s decode error: %v", lp.Source, err)
 				return
 			}
 			lp.Inbound <- event
@@ -69,18 +79,17 @@ func (lp *LogProxy) ReadSource() {
 
 //Apply filters to event
 func (lp *LogProxy) FilterEvents() {
-	infolog.Printf("Filter Open In-Stream: %s\n", lp.Source)
+	infolog.Printf("Filter Open In-Stream: %s Name: %s\n", lp.Source, lp.Name)
 	for {
 		select {
 		case <-lp.ctx.Done():
-			infolog.Printf("Filter Close In-Stream: %s\n", lp.Source)
+			infolog.Printf("Filter Close In-Stream: %s Name: %s\n", lp.Source, lp.Name)
 			return
 		case event := <-lp.Inbound:
 			//for _, filter := range lp.Filters {
 			//	event = filter(event)
 			//}
-			//For Now
-			event.AddTags(lp.Tags)
+			event.AddTags(lp.Source.Tags)
 			lp.Outbound <- event
 		}
 	}
@@ -88,13 +97,13 @@ func (lp *LogProxy) FilterEvents() {
 
 //Write log events to sink
 func (lp *LogProxy) WriteSink() {
-	infolog.Printf("Writer Open Out-Stream: %s\n", lp.Sink)
+	infolog.Printf("Writer Open Out-Stream: %s Name: %s\n", lp.Sink, lp.Name)
 	for {
 		select {
 		case event := <-lp.Outbound:
 			var b []byte
 			var err error
-			if lp.Format == "lineprotocol" {
+			if lp.Sink.Format == "lineprotocol" {
 				b, err = event.ToLP()
 				if err != nil {
 					errlog.Println("Write Sink marshal: ", err)
@@ -107,7 +116,7 @@ func (lp *LogProxy) WriteSink() {
 					continue
 				}
 			}
-			if lp.Sink == "stdout" {
+			if len(lp.Sink.Address) == 0 {
 				os.Stdout.Write(b)
 			} else {
 				url := fmt.Sprintf("http://%s/write?db=%s", lp.Sink, db)
@@ -128,13 +137,13 @@ func (lp *LogProxy) WriteSink() {
 			}
 
 		case <-lp.ctx.Done():
-			infolog.Printf("Writer Close Out-Stream: %s\n", lp.Sink)
+			infolog.Printf("Writer Close Out-Stream: %s Name: %s\n", lp.Sink, lp.Name)
 			return
 		}
 	}
 }
 
 func (lp *LogProxy) Close() {
-	infolog.Printf("\nClosing Connection: %s\n", lp.Name)
+	infolog.Printf("Closing Connection Name: %s\n", lp.Name)
 	lp.cancel()
 }
